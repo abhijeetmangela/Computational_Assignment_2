@@ -3,14 +3,14 @@ import math
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# -----------------------------
-# User parameters
-# -----------------------------
+
+# Input parameters
+
 File_path = 'bumpgrid.dat.txt'   # grid file path
 
 gamma = 1.4                     # ratio of specific heats
 
-# Freestream (non-dimensional) 
+# Freestream conditions
 Mach    = 0.8 
 P_inf   = 1.0*1e+3
 T_inf   = 300
@@ -23,9 +23,9 @@ CFL     = 0.8
 tol     = 1e-6
 niter   = 5000
 
-# -----------------------------
-# Grid reading (same as before)
-# -----------------------------
+
+# Grid reading 
+
 data = np.loadtxt(File_path)
 data = np.array(data)
 
@@ -41,9 +41,9 @@ for j in range(jmx):
         X[i, j] = data[j * imx + i + 1, 0]
         Y[i, j] = data[j * imx + i + 1, 1]
 
-# -----------------------------
-# Geometry: face normals & cell volumes (same idea as before)
-# -----------------------------
+
+# Geometry: face normals & cell volumes 
+
 xnx = np.zeros([imx + 1, jmx + 1])
 xny = np.zeros([imx + 1, jmx + 1])
 
@@ -75,9 +75,9 @@ for j in range(1, jmx):
             abs((x_4 - x_3) * (y_2 - y_3) - (y_4 - y_3) * (x_2 - x_3))
         )
 
-# -----------------------------
+
 # Helper functions
-# -----------------------------
+
 def conservative_to_primitive(rho, rhou, rhov, rhoE, gamma):
     """Convert conservative to primitive variables."""
     u = rhou / rho
@@ -96,13 +96,12 @@ def primitive_to_conservative(rho, u, v, P, gamma):
 def roe_dissipation_flux(qL, qR, nx, ny, gamma):
     """
     Compute Roe dissipation vector d (already multiplied by face area A)
-    using the formulas in the PDF.
     qL, qR: conservative vectors [rho, rhou, rhov, rhoE]
     nx, ny: face normal components (not normalized)
     """
-    tiny = 1e-14
+    eps = 1e-14
 
-    A = math.sqrt(nx**2 + ny**2) + tiny
+    A = math.sqrt(nx**2 + ny**2) + eps
     nx_hat = nx/A
     ny_hat = ny/A
 
@@ -124,15 +123,15 @@ def roe_dissipation_flux(qL, qR, nx, ny, gamma):
     vnl = ul * nx_hat + vl * ny_hat
     vnr = ur * nx_hat + vr * ny_hat
 
-    # Roe averages (standard form; consistent with PDF)
-    r = math.sqrt(max(rhor / max(rhol, tiny), tiny))
-    rhoR = math.sqrt(max(rhol * rhor, tiny))
+    # Roe averages
+    r = math.sqrt(max(rhor / max(rhol, eps), eps))
+    rhoR = math.sqrt(max(rhol * rhor, eps))
     u_r = (ul + r * ur) / (1.0 + r)
     vR = (vl + r * vr) / (1.0 + r)
     H0R = (Hl + r * Hr) / (1.0 + r)
 
     aR2 = (gamma - 1.0) * (H0R - 0.5 * (u_r * u_r + vR * vR))
-    aR2 = max(aR2, tiny)
+    aR2 = max(aR2, eps)
     aR = math.sqrt(aR2)
 
     vnR = u_r*nx_hat + vR*ny_hat
@@ -144,7 +143,7 @@ def roe_dissipation_flux(qL, qR, nx, ny, gamma):
     d_u   = ur - ul
     d_v   = vr - vl
 
-    # alpha's from PDF
+    # alpha's
     alpha1 = A * abs(vnR) * (d_rho - d_P / aR2)
     alpha2 = A / (2.0 * aR2) * abs(vnR + aR) * (d_P + rhoR * aR * d_vn)
     alpha3 = A / (2.0 * aR2) * abs(vnR - aR) * (d_P - rhoR * aR * d_vn)
@@ -230,10 +229,10 @@ def save_solution(iter_num, rho, rhou, rhov, rhoE, gamma, X, Y):
     df.to_csv(filename, index=False)
     print(f"Saved solution to {filename}")
 
-# -----------------------------
+
 # Initialize conservative variables
-# -----------------------------
-# Arrays are (imx+1, jmx+1) to include ghost layers like original code
+
+# Arrays are (imx+1, jmx+1) to include ghost layers
 rho  = np.full((imx + 1, jmx + 1), rho_inf)
 u    = np.full((imx + 1, jmx + 1), u_inf)
 v    = np.full((imx + 1, jmx + 1), v_inf)
@@ -267,13 +266,6 @@ def compute_residual(rho, rhou, rhov, rhoE):
     v = rhov / rho
     vel2 = u * u + v * v
     p = (gamma - 1.0) * (rhoE - 0.5 * rho * vel2)
-
-    # ---- Boundary conditions (same logic as in your loop) ----
-    # Inflow at i = 0
-    #rho[0, :] = rho_inf
-    #u[0, :]   = u_inf
-    #v[0, :]   = v_inf
-    #p[0, :]   = P_inf
 
     if Mach > 1:
         rho[0, :] = rho_inf
@@ -313,7 +305,7 @@ def compute_residual(rho, rhou, rhov, rhoE):
         
         rho[i, j], rhou[i, j], rhov[i, j], rhoE[i, j] = primitive_to_conservative(rho[i, j], u[i, j], v[i, j], P[i, j], gamma)
 
-    # Top Wall
+    # Top Wall (j=jmx ghost, j=jmx-1 interior)
 
     j = jmx
     for i in range(imx + 1):
@@ -327,7 +319,7 @@ def compute_residual(rho, rhou, rhov, rhoE):
         rho[i, j], rhou[i, j], rhov[i, j], rhoE[i, j] = primitive_to_conservative(rho[i, j], u[i, j], v[i, j], P[i, j], gamma)
 
 
-    # ---- Fluxes with Roe dissipation (same as in your loop) ----
+    # Fluxes with Roe dissipation 
     xflux = np.zeros((4, imx + 1, jmx + 1))
     yflux = np.zeros((4, imx + 1, jmx + 1))
 
@@ -361,7 +353,7 @@ def compute_residual(rho, rhou, rhov, rhoE):
 
             yflux[:, i, j] = F_c - 0.5 * d
 
-    # ---- Residual (finite-volume balance) ----
+    # Residual (finite-volume balance) 
     res_local = np.zeros((4, imx + 1, jmx + 1))
     resnorm = 0.0
 
@@ -379,8 +371,7 @@ def compute_residual(rho, rhou, rhov, rhoE):
 
 def compute_dt_over_vol(rho, rhou, rhov, rhoE):
     """
-    Compute local dt/vol using the same CFL formula you had before,
-    based on current primitive variables.
+    Compute local dt/vol using the CFL formula based on primitive variables.
     """
     u = rhou / rho
     v = rhov / rho
@@ -426,7 +417,7 @@ def compute_dt_over_vol(rho, rhou, rhov, rhoE):
             lam_sum = lam_l + lam_r + lam_b + lam_t + eps
             delt_local[i, j] = CFL * 2.0 * vol[i, j] / lam_sum
 
-    # Convert to dt_over_vol for convenience
+    # Convert to dt_over_vol for convenience (For RK4 update)
 
     dt_over_vol = np.zeros_like(rho)
     for j in range(1, jmx):
@@ -436,18 +427,15 @@ def compute_dt_over_vol(rho, rhou, rhov, rhoE):
     return dt_over_vol
 
 
-# -----------------------------
-# Main iteration loop
-# -----------------------------
-# -----------------------------
+
 # Main iteration loop (RK4 in pseudo-time)
-# -----------------------------
-for it in range(niter):
+
+for iter in range(niter):
 
     # compute local dt/vol once from current state
     dt_over_vol = compute_dt_over_vol(rho, rhou, rhov, rhoE)
 
-    # -------- Stage 1 --------
+    # -Stage 1 
     # work on copies because compute_residual modifies arrays via BCs
     rho1  = rho.copy()
     rhou1 = rhou.copy()
@@ -456,20 +444,20 @@ for it in range(niter):
 
     res1, resnorm = compute_residual(rho1, rhou1, rhov1, rhoE1)
 
-    if it == 0:
+    if iter == 0:
         resnorm0 = resnorm if resnorm > 0 else 1.0
 
     resnorm_rel = resnorm / resnorm0
     residual_norms.append(resnorm_rel)
 
-    if it % 10 == 0:
-        print(f"Iteration {it}: Residual = {resnorm_rel:.6e}")
+    if iter % 10 == 0:
+        print(f"Iteration {iter}: Residual = {resnorm_rel:.6e}")
 
     if resnorm_rel < tol:
-        print(f"Converged at iteration {it} with residual {resnorm_rel:.6e}")
+        print(f"Converged at iteration {iter} with residual {resnorm_rel:.6e}")
         break
 
-    # -------- Stage 2 --------
+    # Stage 2 
     rho2  = rho.copy()
     rhou2 = rhou.copy()
     rhov2 = rhov.copy()
@@ -488,7 +476,7 @@ for it in range(niter):
     rhoE2c = rhoE2.copy()
     res2, _ = compute_residual(rho2c, rhou2c, rhov2c, rhoE2c)
 
-    # -------- Stage 3 --------
+    # Stage 3
     rho3  = rho.copy()
     rhou3 = rhou.copy()
     rhov3 = rhov.copy()
@@ -507,7 +495,7 @@ for it in range(niter):
     rhoE3c = rhoE3.copy()
     res3, _ = compute_residual(rho3c, rhou3c, rhov3c, rhoE3c)
 
-    # -------- Stage 4 --------
+    # Stage 4
     rho4  = rho.copy()
     rhou4 = rhou.copy()
     rhov4 = rhov.copy()
@@ -526,7 +514,7 @@ for it in range(niter):
     rhoE4c = rhoE4.copy()
     res4, _ = compute_residual(rho4c, rhou4c, rhov4c, rhoE4c)
 
-    # -------- Final RK4 combination --------
+    # Final RK4 combination
     for j in range(1, jmx):
         for i in range(1, imx):
             factor = dt_over_vol[i, j] / 6.0
@@ -539,12 +527,11 @@ for it in range(niter):
             rhoE[i, j] -= factor * (res1[3, i, j] + 2.0 * res2[3, i, j] +
                                     2.0 * res3[3, i, j] + res4[3, i, j])
 
-    # (BCs will be re-applied at the start of the next iteration
-    #  inside compute_residual)
+    # BCs will be re-applied at the start of the next iteration inside compute_residual
 
 
 # Final save and plots
-save_solution(it, rho, rhou, rhov, rhoE, gamma, X, Y)
+save_solution(iter, rho, rhou, rhov, rhoE, gamma, X, Y)
 
 # Convergence history
 plt.figure(figsize=(8, 5))
@@ -562,6 +549,7 @@ u_node = np.zeros((imx, jmx))
 v_node = np.zeros((imx, jmx))
 p_node = np.zeros((imx, jmx))
 Mach_node = np.zeros((imx,jmx))
+rho_node = np.zeros((imx, jmx))
 
 for j in range(jmx):
     for i in range(imx):
@@ -575,6 +563,7 @@ for j in range(jmx):
                        rhoE[i, j + 1] + rhoE[i + 1, j + 1])
 
         uc, vc, pc = conservative_to_primitive(r_c, ru_c, rv_c, rE_c, gamma)
+        rho_node[i,j] = r_c 
         u_node[i, j] = uc
         v_node[i, j] = vc
         p_node[i, j] = pc
@@ -625,37 +614,9 @@ plt.tight_layout()
 plt.savefig(f'Mach_Roe_Mach_{Mach}.png', dpi=300, bbox_inches='tight')
 plt.show()
 
-imx0, jmx0 = X.shape
-u_node = np.zeros((imx0, jmx0))
-v_node = np.zeros((imx0, jmx0))
-p_node = np.zeros((imx0, jmx0))
-Mach_node = np.zeros((imx0,jmx0))
-rho_node = np.zeros((imx, jmx))
 
-for j in range(jmx0):
-    for i in range(imx0):
-        r_c = 0.25 * (rho[i, j] + rho[i + 1, j] +
-                      rho[i, j + 1] + rho[i + 1, j + 1])
-        ru_c = 0.25 * (rhou[i, j] + rhou[i + 1, j] +
-                       rhou[i, j + 1] + rhou[i + 1, j + 1])
-        rv_c = 0.25 * (rhov[i, j] + rhov[i + 1, j] +
-                       rhov[i, j + 1] + rhov[i + 1, j + 1])
-        rE_c = 0.25 * (rhoE[i, j] + rhoE[i + 1, j] +
-                       rhoE[i, j + 1] + rhoE[i + 1, j + 1])
-
-        uc, vc, pc = conservative_to_primitive(r_c, ru_c, rv_c, rE_c, gamma)
-        rho_node[i,j] = r_c 
-        u_node[i, j] = uc
-        v_node[i, j] = vc
-        p_node[i, j] = pc
-        
-
-        a_node = np.sqrt(gamma*pc/r_c)
-        Mach_node[i,j] = math.sqrt(uc**2 + vc**2)/a_node
-
-# ---------------------------------
 # Numerical Schlieren from density
-# ---------------------------------
+
 drdx = np.zeros_like(rho_node)
 drdy = np.zeros_like(rho_node)
 

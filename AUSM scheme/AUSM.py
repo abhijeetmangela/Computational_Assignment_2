@@ -3,14 +3,14 @@ import math
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# -----------------------------
-# User parameters
-# -----------------------------
+
+# Input parameters
+
 File_path = 'bumpgrid.dat.txt'   # grid file path
 
 gamma = 1.4                     # ratio of specific heats
 
-# Freestream (non-dimensional)
+# Freestream conditions
 
 Mach    = 0.8 
 P_inf   = 1.0*1e+3
@@ -24,9 +24,9 @@ CFL     = 0.8
 tol     = 1e-6
 niter   = 5000
 
-# -----------------------------
-# Grid reading (same as before)
-# -----------------------------
+
+# Grid reading 
+
 data = np.loadtxt(File_path)
 data = np.array(data)
 
@@ -42,9 +42,9 @@ for j in range(jmx):
         X[i, j] = data[j * imx + i + 1, 0]
         Y[i, j] = data[j * imx + i + 1, 1]
 
-# -----------------------------
-# Geometry: face normals & cell volumes (same idea as before)
-# -----------------------------
+
+# Geometry: face normals & cell volumes 
+
 xnx = np.zeros([imx + 1, jmx + 1])
 xny = np.zeros([imx + 1, jmx + 1])
 
@@ -76,9 +76,9 @@ for j in range(1, jmx):
             abs((x_4 - x_3) * (y_2 - y_3) - (y_4 - y_3) * (x_2 - x_3))
         )
 
-# -----------------------------
+
 # Helper functions
-# -----------------------------
+
 def conservative_to_primitive(rho, rhou, rhov, rhoE, gamma):
     """Convert conservative to primitive variables."""
     u = rhou / rho
@@ -102,52 +102,52 @@ def ausm_flux(qL, qR, nx, ny, gamma):
     qL, qR: [rho, rhou, rhov, rhoE]
     nx, ny: face normal components (not normalized)
     """
-    tiny = 1e-14
+    eps = 1e-14
 
     # Face geometry
-    A = math.sqrt(nx * nx + ny * ny) + tiny
+    A = math.sqrt(nx * nx + ny * ny) + eps
     nx_hat = nx / A
     ny_hat = ny / A
 
-    # --- Left state ---
+    # Left state 
     rhoL = qL[0]
     uL   = qL[1] / rhoL
     vL   = qL[2] / rhoL
     pL   = (gamma - 1.0) * (qL[3] - 0.5 * rhoL * (uL*uL + vL*vL))
-    aL   = math.sqrt(max(gamma * pL / rhoL, tiny))
+    aL   = math.sqrt(max(gamma * pL / rhoL, eps))
     HL   = (qL[3] + pL) / rhoL
 
     VnL  = uL * nx_hat + vL * ny_hat
     ML   = VnL / aL
 
-    # --- Right state ---
+    # Right state 
     rhoR = qR[0]
     uR   = qR[1] / rhoR
     vR   = qR[2] / rhoR
     pR   = (gamma - 1.0) * (qR[3] - 0.5 * rhoR * (uR*uR + vR*vR))
-    aR   = math.sqrt(max(gamma * pR / rhoR, tiny))
+    aR   = math.sqrt(max(gamma * pR / rhoR, eps))
     HR   = (qR[3] + pR) / rhoR
 
     VnR  = uR * nx_hat + vR * ny_hat
     MR   = VnR / aR
 
-    # --- Mach number splitting ---
-    def M_split_pos(M):
+    # Mach number splitting 
+    def M_split_positive(M):
         if abs(M) >= 1.0:
             return 0.5 * (M + abs(M))
         else:
             return 0.25 * (M + 1.0)**2
 
-    def M_split_neg(M):
+    def M_split_negative(M):
         if abs(M) >= 1.0:
             return 0.5 * (M - abs(M))
         else:
             return -0.25 * (M - 1.0)**2
 
-    MplusL  = M_split_pos(ML)
-    MminusL = M_split_neg(ML)
-    MplusR  = M_split_pos(MR)
-    MminusR = M_split_neg(MR)
+    MplusL  = M_split_positive(ML)
+    MminusL = M_split_negative(ML)
+    MplusR  = M_split_positive(MR)
+    MminusR = M_split_negative(MR)
 
     # mass flux (per unit area)
     m_face = rhoL * aL * MplusL + rhoR * aR * MminusR
@@ -169,7 +169,7 @@ def ausm_flux(qL, qR, nx, ny, gamma):
     p_minusR = P_split_neg(MR, pR)
     p_face = p_plusL + p_minusR
 
-    # --- Upwind state for u, v, H ---
+    # Upwind state for u, v, H 
     if m_face >= 0.0:
         u_face = uL
         v_face = vL
@@ -179,7 +179,7 @@ def ausm_flux(qL, qR, nx, ny, gamma):
         v_face = vR
         H_face = HR
 
-    # --- Flux per unit area ---
+    # Flux per unit area 
     F1 = m_face
     F2 = m_face * u_face + p_face * nx_hat
     F3 = m_face * v_face + p_face * ny_hat
@@ -233,9 +233,9 @@ def save_solution(iter_num, rho, rhou, rhov, rhoE, gamma, X, Y):
     df.to_csv(filename, index=False)
     print(f"Saved solution to {filename}")
 
-# -----------------------------
+
 # Initialize conservative variables
-# -----------------------------
+
 # Arrays are (imx+1, jmx+1) to include ghost layers like original code
 rho  = np.full((imx + 1, jmx + 1), rho_inf)
 u    = np.full((imx + 1, jmx + 1), u_inf)
@@ -270,13 +270,6 @@ def compute_residual(rho, rhou, rhov, rhoE):
     v = rhov / rho
     vel2 = u * u + v * v
     p = (gamma - 1.0) * (rhoE - 0.5 * rho * vel2)
-
-    # ---- Boundary conditions (same logic as in your loop) ----
-    # Inflow at i = 0
-    #rho[0, :] = rho_inf
-    #u[0, :]   = u_inf
-    #v[0, :]   = v_inf
-    #p[0, :]   = P_inf
 
     if Mach > 1:
         rho[0, :] = rho_inf
@@ -316,7 +309,7 @@ def compute_residual(rho, rhou, rhov, rhoE):
         
         rho[i, j], rhou[i, j], rhov[i, j], rhoE[i, j] = primitive_to_conservative(rho[i, j], u[i, j], v[i, j], P[i, j], gamma)
 
-    # Top Wall
+    # Top Wall (j=jmx ghost, j=jmx-1 interior)
 
     j = jmx
     for i in range(imx + 1):
@@ -330,13 +323,11 @@ def compute_residual(rho, rhou, rhov, rhoE):
         rho[i, j], rhou[i, j], rhov[i, j], rhoE[i, j] = primitive_to_conservative(rho[i, j], u[i, j], v[i, j], P[i, j], gamma)
 
 
-    # ---- Fluxes with Roe dissipation (same as in your loop) ----
+    # Fluxes with AUSM
     xflux = np.zeros((4, imx + 1, jmx + 1))
     yflux = np.zeros((4, imx + 1, jmx + 1))
 
     # i-face fluxes
-        # i-face fluxes
-        # i-face fluxes (AUSM)
     for j in range(1, jmx):
         for i in range(imx):
             qL = np.array([rho[i, j],   rhou[i, j],   rhov[i, j],   rhoE[i, j]])
@@ -348,10 +339,7 @@ def compute_residual(rho, rhou, rhov, rhoE):
             F_ausm = ausm_flux(qL, qR, nx, ny, gamma)
             xflux[:, i, j] = F_ausm
 
-
-
     # j-face fluxes
-        # j-face fluxes (AUSM)
     for j in range(jmx):
         for i in range(1, imx):
             qL = np.array([rho[i, j],     rhou[i, j],     rhov[i, j],     rhoE[i, j]])
@@ -364,7 +352,7 @@ def compute_residual(rho, rhou, rhov, rhoE):
             yflux[:, i, j] = F_ausm
 
 
-    # ---- Residual (finite-volume balance) ----
+    # Residual (finite-volume balance)
     res_local = np.zeros((4, imx + 1, jmx + 1))
     resnorm = 0.0
 
@@ -382,8 +370,7 @@ def compute_residual(rho, rhou, rhov, rhoE):
 
 def compute_dt_over_vol(rho, rhou, rhov, rhoE):
     """
-    Compute local dt/vol using the same CFL formula you had before,
-    based on current primitive variables.
+    Compute local dt/vol using the CFL formula based on primitive variables.
     """
     u = rhou / rho
     v = rhov / rho
@@ -429,7 +416,7 @@ def compute_dt_over_vol(rho, rhou, rhov, rhoE):
             lam_sum = lam_l + lam_r + lam_b + lam_t + eps
             delt_local[i, j] = CFL * 2.0 * vol[i, j] / lam_sum
 
-    # Convert to dt_over_vol for convenience
+    # Convert to dt_over_vol for convenience (For RK4 update)
 
     dt_over_vol = np.zeros_like(rho)
     for j in range(1, jmx):
@@ -439,18 +426,15 @@ def compute_dt_over_vol(rho, rhou, rhov, rhoE):
     return dt_over_vol
 
 
-# -----------------------------
-# Main iteration loop
-# -----------------------------
-# -----------------------------
+
 # Main iteration loop (RK4 in pseudo-time)
-# -----------------------------
-for it in range(niter):
+
+for iter in range(niter):
 
     # compute local dt/vol once from current state
     dt_over_vol = compute_dt_over_vol(rho, rhou, rhov, rhoE)
 
-    # -------- Stage 1 --------
+    # Stage 1
     # work on copies because compute_residual modifies arrays via BCs
     rho1  = rho.copy()
     rhou1 = rhou.copy()
@@ -459,17 +443,17 @@ for it in range(niter):
 
     res1, resnorm = compute_residual(rho1, rhou1, rhov1, rhoE1)
 
-    if it == 0:
+    if iter == 0:
         resnorm0 = resnorm if resnorm > 0 else 1.0
 
     resnorm_rel = resnorm / resnorm0
     residual_norms.append(resnorm_rel)
 
-    if it % 10 == 0:
-        print(f"Iteration {it}: Residual = {resnorm_rel:.6e}")
+    if iter % 10 == 0:
+        print(f"Iteration {iter}: Residual = {resnorm_rel:.6e}")
 
     if resnorm_rel < tol:
-        print(f"Converged at iteration {it} with residual {resnorm_rel:.6e}")
+        print(f"Converged at iteration {iter} with residual {resnorm_rel:.6e}")
         break
 
     # -------- Stage 2 --------
@@ -491,7 +475,7 @@ for it in range(niter):
     rhoE2c = rhoE2.copy()
     res2, _ = compute_residual(rho2c, rhou2c, rhov2c, rhoE2c)
 
-    # -------- Stage 3 --------
+    # Stage 3
     rho3  = rho.copy()
     rhou3 = rhou.copy()
     rhov3 = rhov.copy()
@@ -510,7 +494,7 @@ for it in range(niter):
     rhoE3c = rhoE3.copy()
     res3, _ = compute_residual(rho3c, rhou3c, rhov3c, rhoE3c)
 
-    # -------- Stage 4 --------
+    # Stage 4 
     rho4  = rho.copy()
     rhou4 = rhou.copy()
     rhov4 = rhov.copy()
@@ -529,7 +513,7 @@ for it in range(niter):
     rhoE4c = rhoE4.copy()
     res4, _ = compute_residual(rho4c, rhou4c, rhov4c, rhoE4c)
 
-    # -------- Final RK4 combination --------
+    # Final RK4 combination 
     for j in range(1, jmx):
         for i in range(1, imx):
             factor = dt_over_vol[i, j] / 6.0
@@ -542,12 +526,11 @@ for it in range(niter):
             rhoE[i, j] -= factor * (res1[3, i, j] + 2.0 * res2[3, i, j] +
                                     2.0 * res3[3, i, j] + res4[3, i, j])
 
-    # (BCs will be re-applied at the start of the next iteration
-    #  inside compute_residual)
+    # BCs will be re-applied at the start of the next iteration inside compute_residual
 
 
 # Final save and plots
-save_solution(it, rho, rhou, rhov, rhoE, gamma, X, Y)
+save_solution(iter, rho, rhou, rhov, rhoE, gamma, X, Y)
 
 # Convergence history
 plt.figure(figsize=(8, 5))
@@ -560,15 +543,14 @@ plt.savefig(f'convergence_AUSM_Mach_{Mach}.png', dpi=300, bbox_inches='tight')
 plt.show()
 
 # Simple contour plots at nodes
-imx0, jmx0 = X.shape
-u_node = np.zeros((imx0, jmx0))
-v_node = np.zeros((imx0, jmx0))
-p_node = np.zeros((imx0, jmx0))
-Mach_node = np.zeros((imx0,jmx0))
+u_node = np.zeros((imx, jmx))
+v_node = np.zeros((imx, jmx))
+p_node = np.zeros((imx, jmx))
+Mach_node = np.zeros((imx,jmx))
 rho_node = np.zeros((imx, jmx))
 
-for j in range(jmx0):
-    for i in range(imx0):
+for j in range(jmx):
+    for i in range(imx):
         r_c = 0.25 * (rho[i, j] + rho[i + 1, j] +
                       rho[i, j + 1] + rho[i + 1, j + 1])
         ru_c = 0.25 * (rhou[i, j] + rhou[i + 1, j] +
@@ -583,7 +565,6 @@ for j in range(jmx0):
         u_node[i, j] = uc
         v_node[i, j] = vc
         p_node[i, j] = pc
-        
 
         a_node = np.sqrt(gamma*pc/r_c)
         Mach_node[i,j] = math.sqrt(uc**2 + vc**2)/a_node
@@ -630,51 +611,22 @@ plt.tight_layout()
 plt.savefig(f'Mach_AUSM_Mach_{Mach}.png', dpi=300, bbox_inches='tight')
 plt.show()
 
-imx0, jmx0 = X.shape
-u_node = np.zeros((imx0, jmx0))
-v_node = np.zeros((imx0, jmx0))
-p_node = np.zeros((imx0, jmx0))
-Mach_node = np.zeros((imx0,jmx0))
-rho_node = np.zeros((imx, jmx))
 
-for j in range(jmx0):
-    for i in range(imx0):
-        r_c = 0.25 * (rho[i, j] + rho[i + 1, j] +
-                      rho[i, j + 1] + rho[i + 1, j + 1])
-        ru_c = 0.25 * (rhou[i, j] + rhou[i + 1, j] +
-                       rhou[i, j + 1] + rhou[i + 1, j + 1])
-        rv_c = 0.25 * (rhov[i, j] + rhov[i + 1, j] +
-                       rhov[i, j + 1] + rhov[i + 1, j + 1])
-        rE_c = 0.25 * (rhoE[i, j] + rhoE[i + 1, j] +
-                       rhoE[i, j + 1] + rhoE[i + 1, j + 1])
-
-        uc, vc, pc = conservative_to_primitive(r_c, ru_c, rv_c, rE_c, gamma)
-        rho_node[i,j] = r_c 
-        u_node[i, j] = uc
-        v_node[i, j] = vc
-        p_node[i, j] = pc
-        
-
-        a_node = np.sqrt(gamma*pc/r_c)
-        Mach_node[i,j] = math.sqrt(uc**2 + vc**2)/a_node
-
-# ---------------------------------
 # Numerical Schlieren from density
-# ---------------------------------
+
 drdx = np.zeros_like(rho_node)
 drdy = np.zeros_like(rho_node)
 
 # central differences in physical space (x, y)
-tiny = 1e-12
 for j in range(1, jmx-1):
     for i in range(1, imx-1):
         dx = X[i+1, j] - X[i-1, j]
         dy = Y[i, j+1] - Y[i, j-1]
 
-        if abs(dx) < tiny:
-            dx = tiny
-        if abs(dy) < tiny:
-            dy = tiny
+        if abs(dx) < eps:
+            dx = eps
+        if abs(dy) < eps:
+            dy = eps
 
         drdx[i, j] = (rho_node[i+1, j] - rho_node[i-1, j]) / dx
         drdy[i, j] = (rho_node[i, j+1] - rho_node[i, j-1]) / dy
@@ -684,8 +636,8 @@ grad_rho = np.sqrt(drdx**2 + drdy**2)
 
 # avoid division by zero
 max_grad = np.max(grad_rho)
-if max_grad < tiny:
-    max_grad = tiny
+if max_grad < eps:
+    max_grad = eps
 
 grad_rho_norm = grad_rho / max_grad
 

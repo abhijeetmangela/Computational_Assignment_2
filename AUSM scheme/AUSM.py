@@ -280,15 +280,20 @@ def compute_residual(rho, rhou, rhov, rhoE):
         rho[0, :] = rho_inf
         u[0, :] = u_inf
         v[0, :] = v_inf
-        P[0, :] = P[1,:]
+        P[0, :] = P[1, :]
 
+    
     rho[0, :], rhou[0, :], rhov[0, :], rhoE[0, :] = primitive_to_conservative(rho[0, :], u[0, :], v[0, :], p[0, :], gamma)
 
     # Outflow at i = imx 
+
     rho[imx, :]  = rho[imx - 1, :]
-    rhou[imx, :] = rhou[imx - 1, :]
-    rhov[imx, :] = rhov[imx - 1, :]
-    rhoE[imx, :] = rhoE[imx - 1, :]
+    u[imx, :]    = u[imx - 1, :]
+    v[imx, :]    = v[imx - 1, :]
+    P[imx, :]    = P[imx - 1, :]
+
+    rho[imx, :], rhou[imx, :], rhov[imx, :], rhoE[imx, :] = primitive_to_conservative(rho[imx, :], u[imx, :], v[imx, :], P[imx, :], gamma)
+
 
     # Recompute primitives after outlet BC
     u = rhou / rho
@@ -387,31 +392,31 @@ def compute_dt_over_vol(rho, rhou, rhov, rhoE):
             A_l = math.sqrt(nx_l * nx_l + ny_l * ny_l) + eps
             u_l = u[i, j]
             v_l = v[i, j]
-            p_l = p[i, j]
-            a_l = math.sqrt(max(gamma * p_l / rho[i, j], 0))
+            press = p[i, j]
+            speed_sound_loc = math.sqrt(max(gamma * press / rho[i, j], 0))
             vn_l = (u_l * nx_l + v_l * ny_l) / A_l
-            lam_l = A_l * (abs(vn_l) + a_l)
+            lam_l = A_l * (abs(vn_l) + speed_sound_loc)
 
             # right face
             nx_r = xnx[i, j]
             ny_r = xny[i, j]
             A_r = math.sqrt(nx_r * nx_r + ny_r * ny_r) + eps
             vn_r = (u[i, j] * nx_r + v[i, j] * ny_r) / A_r
-            lam_r = A_r * (abs(vn_r) + a_l)
+            lam_r = A_r * (abs(vn_r) + speed_sound_loc)
 
             # bottom face
             nx_b = ynx[i, j - 1]
             ny_b = yny[i, j - 1]
             A_b = math.sqrt(nx_b * nx_b + ny_b * ny_b) + eps
             vn_b = (u[i, j] * nx_b + v[i, j] * ny_b) / A_b
-            lam_b = A_b * (abs(vn_b) + a_l)
+            lam_b = A_b * (abs(vn_b) + speed_sound_loc)
 
             # top face
             nx_t = ynx[i, j]
             ny_t = yny[i, j]
             A_t = math.sqrt(nx_t * nx_t + ny_t * ny_t) + eps
             vn_t = (u[i, j] * nx_t + v[i, j] * ny_t) / A_t
-            lam_t = A_t * (abs(vn_t) + a_l)
+            lam_t = A_t * (abs(vn_t) + speed_sound_loc)
 
             lam_sum = lam_l + lam_r + lam_b + lam_t + eps
             delt_local[i, j] = CFL * 2.0 * vol[i, j] / lam_sum

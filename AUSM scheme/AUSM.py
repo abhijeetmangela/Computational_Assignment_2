@@ -277,10 +277,10 @@ def compute_residual(rho, rhou, rhov, rhoE):
         v[0, :] = v_inf
         P[0, :] = P_inf
     else:
-        rho[0, :] = rho[1, :]
-        u[0, :] = u[1, :]
-        v[0, :] = v[1, :]
-        P[0, :] = P[1, :]
+        rho[0, :] = rho_inf
+        u[0, :] = u_inf
+        v[0, :] = v_inf
+        P[0, :] = P[1,:]
 
     rho[0, :], rhou[0, :], rhov[0, :], rhoE[0, :] = primitive_to_conservative(rho[0, :], u[0, :], v[0, :], p[0, :], gamma)
 
